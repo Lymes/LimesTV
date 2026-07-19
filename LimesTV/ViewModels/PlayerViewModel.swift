@@ -15,14 +15,14 @@ import UIKit
 @MainActor
 @Observable
 final class PlayerViewModel {
-    let channels: [Channel]
-    private(set) var currentIndex: Int
+    private let channels: [Channel]
+    private var currentIndex: Int
     private(set) var player: AVPlayer?
     private(set) var isShowingBanner = false
 
     /// Direction of the last zap: +1 when moving to the next channel (swipe up),
     /// -1 for the previous one (swipe down). Drives the slide transition.
-    private(set) var lastZapDirection = 1
+    private var lastZapDirection = 1
 
     /// Frozen last frame of the outgoing channel, shown on top of the (loading)
     /// new channel while both slide across during a zap.
@@ -46,6 +46,9 @@ final class PlayerViewModel {
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
     @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
     @ObservationIgnored private let ciContext = CIContext()
+    /// Identifies the current slide so a superseded one can't clear the frame
+    /// of a newer zap when its completion fires late.
+    @ObservationIgnored private var slideGeneration = 0
 
     init(channels: [Channel], initialChannel: Channel) {
         self.channels = channels
@@ -120,6 +123,8 @@ final class PlayerViewModel {
         guard viewportHeight > 0 else { return }
         let height = viewportHeight
         let goingUp = lastZapDirection > 0
+        slideGeneration += 1
+        let generation = slideGeneration
 
         var setup = Transaction()
         setup.disablesAnimations = true
@@ -135,8 +140,10 @@ final class PlayerViewModel {
                 self.playerOffset = 0
                 self.snapshotOffset = goingUp ? -height : height
             } completion: { [weak self] in
-                self?.outgoingSnapshot = nil
-                self?.snapshotOffset = 0
+                // Ignore if a newer zap has already taken over the slide.
+                guard let self, self.slideGeneration == generation else { return }
+                self.outgoingSnapshot = nil
+                self.snapshotOffset = 0
             }
         }
     }
