@@ -7,13 +7,26 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		78EFCCB0300CBF9300BC2F1F /* LymesTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LymesTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		78EFCCB0300CBF9300BC2F1F /* LimesTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LimesTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		78EFCCC9300CC85300BC2F1F /* Exceptions for "LimesTV" folder in "LimesTV" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 78EFCCAF300CBF9200BC2F1F /* LimesTV */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		78EFCCB2300CBF9300BC2F1F /* LymesTV */ = {
+		78EFCCB2300CBF9300BC2F1F /* LimesTV */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = LymesTV;
+			exceptions = (
+				78EFCCC9300CC85300BC2F1F /* Exceptions for "LimesTV" folder in "LimesTV" target */,
+			);
+			path = LimesTV;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +45,7 @@
 		78EFCCA7300CBF9200BC2F1F = {
 			isa = PBXGroup;
 			children = (
-				78EFCCB2300CBF9300BC2F1F /* LymesTV */,
+				78EFCCB2300CBF9300BC2F1F /* LimesTV */,
 				78EFCCB1300CBF9300BC2F1F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +53,7 @@
 		78EFCCB1300CBF9300BC2F1F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				78EFCCB0300CBF9300BC2F1F /* LymesTV.app */,
+				78EFCCB0300CBF9300BC2F1F /* LimesTV.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		78EFCCAF300CBF9200BC2F1F /* LymesTV */ = {
+		78EFCCAF300CBF9200BC2F1F /* LimesTV */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 78EFCCBB300CBF9600BC2F1F /* Build configuration list for PBXNativeTarget "LymesTV" */;
+			buildConfigurationList = 78EFCCBB300CBF9600BC2F1F /* Build configuration list for PBXNativeTarget "LimesTV" */;
 			buildPhases = (
 				78EFCCAC300CBF9200BC2F1F /* Sources */,
 				78EFCCAD300CBF9200BC2F1F /* Frameworks */,
@@ -61,13 +74,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				78EFCCB2300CBF9300BC2F1F /* LymesTV */,
+				78EFCCB2300CBF9300BC2F1F /* LimesTV */,
 			);
-			name = LymesTV;
+			name = LimesTV;
 			packageProductDependencies = (
 			);
 			productName = LymesTV;
-			productReference = 78EFCCB0300CBF9300BC2F1F /* LymesTV.app */;
+			productReference = 78EFCCB0300CBF9300BC2F1F /* LimesTV.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +98,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 78EFCCAB300CBF9200BC2F1F /* Build configuration list for PBXProject "LymesTV" */;
+			buildConfigurationList = 78EFCCAB300CBF9200BC2F1F /* Build configuration list for PBXProject "LimesTV" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -99,7 +112,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				78EFCCAF300CBF9200BC2F1F /* LymesTV */,
+				78EFCCAF300CBF9200BC2F1F /* LimesTV */,
 			);
 		};
 /* End PBXProject section */
@@ -256,9 +269,9 @@
 				DEVELOPMENT_TEAM = QVFBZ7RHN2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LimesTV/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -266,7 +279,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lymes.LymesTV;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lymes.LimesTV;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -288,9 +301,9 @@
 				DEVELOPMENT_TEAM = QVFBZ7RHN2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LimesTV/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -298,7 +311,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lymes.LymesTV;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lymes.LimesTV;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -313,7 +326,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		78EFCCAB300CBF9200BC2F1F /* Build configuration list for PBXProject "LymesTV" */ = {
+		78EFCCAB300CBF9200BC2F1F /* Build configuration list for PBXProject "LimesTV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				78EFCCB9300CBF9600BC2F1F /* Debug */,
@@ -322,7 +335,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		78EFCCBB300CBF9600BC2F1F /* Build configuration list for PBXNativeTarget "LymesTV" */ = {
+		78EFCCBB300CBF9600BC2F1F /* Build configuration list for PBXNativeTarget "LimesTV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				78EFCCBC300CBF9600BC2F1F /* Debug */,
