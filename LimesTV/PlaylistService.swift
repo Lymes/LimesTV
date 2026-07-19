@@ -11,7 +11,7 @@ enum PlaylistError: Error {
     case resourceMissing
 }
 
-struct PlaylistService {
+nonisolated struct PlaylistService {
     /// Playlists bundled with the app, loaded and merged in order.
     static let bundledResourceExtension = "m3u8"
     static let bundledResourceNames = ["playlist_italy", "ucraina"]
