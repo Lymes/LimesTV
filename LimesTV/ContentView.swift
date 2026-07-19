@@ -32,10 +32,8 @@ struct ContentView: View {
             .navigationTitle("TV Channels")
             .navigationDestination(for: Channel.self) { channel in
                 PlayerView(
-                    channels: viewModel.channels,
                     initialChannel: channel,
-                    lastViewedChannel: $viewModel.lastViewedChannel,
-                    settings: appSettings
+                    lastViewedChannel: $viewModel.lastViewedChannel
                 )
             }
             .searchable(text: $viewModel.searchText, prompt: "Search channels")

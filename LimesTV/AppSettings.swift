@@ -54,6 +54,9 @@ enum VideoQuality: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class AppSettings {
+    /// Shared instance used across the SwiftUI and CarPlay scenes.
+    static let shared = AppSettings()
+
     /// Preferred playback quality cap. Defaults to `.auto` to preserve quality.
     var videoQuality: VideoQuality {
         didSet { defaults.set(videoQuality.rawValue, forKey: Keys.videoQuality) }

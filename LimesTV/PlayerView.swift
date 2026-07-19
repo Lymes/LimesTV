@@ -17,8 +17,8 @@ struct PlayerView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dismiss) private var dismiss
 
-    init(channels: [Channel], initialChannel: Channel, lastViewedChannel: Binding<Channel?>, settings: AppSettings) {
-        _viewModel = State(initialValue: PlayerViewModel(channels: channels, initialChannel: initialChannel, settings: settings))
+    init(initialChannel: Channel, lastViewedChannel: Binding<Channel?>) {
+        _viewModel = State(initialValue: PlayerViewModel(initialChannel: initialChannel))
         _lastViewedChannel = lastViewedChannel
     }
 
@@ -62,8 +62,10 @@ struct PlayerView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .statusBarHidden(isLandscape)
         .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
+        .onChange(of: viewModel.currentChannel) { _, channel in
+            lastViewedChannel = channel
+        }
         .onAppear {
-            viewModel.onChannelChange = { lastViewedChannel = $0 }
             viewModel.start()
         }
         .onDisappear {

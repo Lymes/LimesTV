@@ -9,7 +9,8 @@ import SwiftUI
 
 @main
 struct LimesTVApp: App {
-    @State private var settings = AppSettings()
+    // Shared with the CarPlay scene and the PlaybackController.
+    @State private var settings = AppSettings.shared
 
     var body: some Scene {
         WindowGroup {

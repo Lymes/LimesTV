@@ -2,11 +2,11 @@
 //  PlayerViewModel.swift
 //  LimesTV
 //
-//  Drives PlayerView: playback, channel zapping and stall recovery.
+//  Drives PlayerView: the phone-only carousel zap transition and banner. Actual
+//  playback and channel zapping are delegated to the shared PlaybackController.
 //
 
 import AVKit
-import CoreImage
 import Foundation
 import Observation
 import SwiftUI
@@ -15,13 +15,10 @@ import UIKit
 @MainActor
 @Observable
 final class PlayerViewModel {
-    private let channels: [Channel]
-    private var currentIndex: Int
-    private(set) var player: AVPlayer?
     private(set) var isShowingBanner = false
 
-    /// Direction of the last zap: +1 when moving to the next channel (swipe up),
-    /// -1 for the previous one (swipe down). Drives the slide transition.
+    /// Direction of the last zap: +1 for the next channel (swipe up), -1 for the
+    /// previous one (swipe down). Drives the slide transition.
     private var lastZapDirection = 1
 
     /// Frozen last frame of the outgoing channel, shown on top of the (loading)
@@ -38,42 +35,37 @@ final class PlayerViewModel {
 
     private let slideDuration = 0.35
 
-    /// Reports the channel currently on screen so the list can stay in sync.
-    var onChannelChange: ((Channel) -> Void)?
-
-    @ObservationIgnored private var stallObserver: NSObjectProtocol?
-    @ObservationIgnored private var statusObserver: NSKeyValueObservation?
-    @ObservationIgnored private var bannerTask: Task<Void, Never>?
-    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
-    @ObservationIgnored private let ciContext = CIContext()
-    /// Identifies the current slide so a superseded one can't clear the frame
-    /// of a newer zap when its completion fires late.
-    @ObservationIgnored private var slideGeneration = 0
+    @ObservationIgnored private let initialChannel: Channel
+    @ObservationIgnored private let playback: PlaybackController
     @ObservationIgnored private let settings: AppSettings
 
-    init(channels: [Channel], initialChannel: Channel, settings: AppSettings) {
-        self.channels = channels
-        self.currentIndex = channels.firstIndex(of: initialChannel) ?? 0
+    @ObservationIgnored private var slideGeneration = 0
+    @ObservationIgnored private var bannerTask: Task<Void, Never>?
+
+    init(initialChannel: Channel,
+         playback: PlaybackController = .shared,
+         settings: AppSettings = .shared) {
+        self.initialChannel = initialChannel
+        self.playback = playback
         self.settings = settings
     }
 
-    /// The channel currently playing.
-    var currentChannel: Channel { channels[currentIndex] }
+    /// The player and current channel come from the shared controller.
+    var player: AVPlayer? { playback.player }
+    var currentChannel: Channel { playback.currentChannel ?? initialChannel }
 
     // MARK: - Lifecycle
 
     func start() {
-        configureAudioSession()
-        onChannelChange?(currentChannel)
-        play(currentChannel)
+        Task {
+            await playback.loadChannelsIfNeeded()
+            playback.play(initialChannel)
+        }
     }
 
     func stop() {
         bannerTask?.cancel()
-        teardownObservers()
-        player?.pause()
-        player = nil
-        videoOutput = nil
+        playback.stop()
         outgoingSnapshot = nil
     }
 
@@ -86,7 +78,7 @@ final class PlayerViewModel {
         let dx = translation.width
         if abs(dy) > abs(dx) {
             guard abs(dy) > 50 else { return false }
-            changeChannel(by: dy < 0 ? 1 : -1)
+            zap(by: dy < 0 ? 1 : -1)
             return false
         } else if isLandscape, dx > 80 {
             return true
@@ -96,18 +88,12 @@ final class PlayerViewModel {
 
     // MARK: - Zapping
 
-    /// Moves `delta` channels away (wrapping around) and reloads the player.
-    private func changeChannel(by delta: Int) {
-        guard channels.count > 1 else { return }
-        // Freeze the current frame before swapping the item so it can cover the
-        // new channel's load while both layers slide across.
-        let snapshot = snapshotCurrentFrame()
+    private func zap(by delta: Int) {
+        // Freeze the current frame before swapping so it can cover the new
+        // channel's load while both layers slide across.
+        let snapshot = playback.snapshotCurrentFrame()
         lastZapDirection = delta
-        currentIndex = (currentIndex + delta + channels.count) % channels.count
-        onChannelChange?(currentChannel)
-        play(currentChannel)
-        // Slide only when enabled and a frame was captured to cover the swap;
-        // otherwise a plain cut avoids flicking an empty layer across the screen.
+        playback.changeChannel(by: delta)
         if let snapshot, settings.isChannelTransitionEnabled {
             beginZapSlide(snapshot: snapshot)
         }
@@ -150,92 +136,6 @@ final class PlayerViewModel {
         }
     }
 
-    /// Loads and starts playback of the given channel.
-    ///
-    /// A single `AVPlayer` is reused across channels (its item is swapped) to
-    /// avoid tearing down/recreating the media XPC connection on every zap.
-    /// The freeze-on-first-frame issue is handled by disabling the stall wait
-    /// and only starting playback once the item is `.readyToPlay`.
-    private func play(_ channel: Channel) {
-        teardownObservers()
-
-        let item = AVPlayerItem(url: channel.streamURL)
-        applyQualityCap(to: item)
-
-        // Tap the video frames so we can grab a still for the zap transition.
-        let output = AVPlayerItemVideoOutput(
-            pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        )
-        item.add(output)
-        videoOutput = output
-
-        let activePlayer: AVPlayer
-        if let player {
-            activePlayer = player
-            activePlayer.replaceCurrentItem(with: item)
-        } else {
-            activePlayer = AVPlayer(playerItem: item)
-            // Don't wait to minimise stalls, otherwise the player can show the
-            // first frame and then wait forever instead of starting playback.
-            activePlayer.automaticallyWaitsToMinimizeStalling = false
-            player = activePlayer
-        }
-
-        // Kick off playback only once the item is actually ready. Calling play()
-        // while the item is still loading is what left it frozen on a still frame
-        // until a manual stop/play.
-        statusObserver = item.observe(\.status, options: [.new]) { observedItem, _ in
-            if observedItem.status == .readyToPlay {
-                activePlayer.play()
-            }
-        }
-
-        // Auto-recover from stalls that happen after playback has started.
-        stallObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemPlaybackStalled,
-            object: item,
-            queue: .main
-        ) { _ in
-            activePlayer.play()
-        }
-
-        activePlayer.play()
-    }
-
-    /// Applies the user's optional quality cap to a freshly created item. `.auto`
-    /// leaves the defaults untouched so AVFoundation streams the best variant.
-    private func applyQualityCap(to item: AVPlayerItem) {
-        let quality = settings.videoQuality
-        if let maxResolution = quality.maximumResolution {
-            item.preferredMaximumResolution = maxResolution
-        }
-        if quality.peakBitRate > 0 {
-            item.preferredPeakBitRate = quality.peakBitRate
-        }
-    }
-
-    /// Grabs the frame currently on screen as a still image, used as the
-    /// outgoing layer of the zap slide.
-    private func snapshotCurrentFrame() -> UIImage? {
-        guard let videoOutput, let item = player?.currentItem else { return nil }
-        let time = item.currentTime()
-        guard let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else {
-            return nil
-        }
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
-
-    private func teardownObservers() {
-        statusObserver?.invalidate()
-        statusObserver = nil
-        if let stallObserver {
-            NotificationCenter.default.removeObserver(stallObserver)
-            self.stallObserver = nil
-        }
-    }
-
     // MARK: - Banner
 
     /// Shows the channel banner and hides it again after a short delay.
@@ -246,18 +146,6 @@ final class PlayerViewModel {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             self?.isShowingBanner = false
-        }
-    }
-
-    // MARK: - Audio
-
-    /// Enables audio playback even when the device's silent switch is on.
-    private func configureAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("Failed to configure audio session: \(error)")
         }
     }
 }
