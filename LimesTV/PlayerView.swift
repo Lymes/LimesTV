@@ -17,8 +17,8 @@ struct PlayerView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dismiss) private var dismiss
 
-    init(channels: [Channel], initialChannel: Channel, lastViewedChannel: Binding<Channel?>) {
-        _viewModel = State(initialValue: PlayerViewModel(channels: channels, initialChannel: initialChannel))
+    init(channels: [Channel], initialChannel: Channel, lastViewedChannel: Binding<Channel?>, settings: AppSettings) {
+        _viewModel = State(initialValue: PlayerViewModel(channels: channels, initialChannel: initialChannel, settings: settings))
         _lastViewedChannel = lastViewedChannel
     }
 

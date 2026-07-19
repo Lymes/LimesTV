@@ -19,6 +19,8 @@ final class ContentViewModel {
     var searchText = ""
     /// The channel last shown in the player, used to keep the list in sync.
     var lastViewedChannel: Channel?
+    /// Whether the settings sheet is presented.
+    var isShowingSettings = false
 
     private let service: PlaylistService
 

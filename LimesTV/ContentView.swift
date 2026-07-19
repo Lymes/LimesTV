@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = ContentViewModel()
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -33,12 +34,25 @@ struct ContentView: View {
                 PlayerView(
                     channels: viewModel.channels,
                     initialChannel: channel,
-                    lastViewedChannel: $viewModel.lastViewedChannel
+                    lastViewedChannel: $viewModel.lastViewedChannel,
+                    settings: appSettings
                 )
             }
             .searchable(text: $viewModel.searchText, prompt: "Search channels")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $viewModel.isShowingSettings) {
+            SettingsView(settings: appSettings)
+        }
         .task {
             await viewModel.loadChannelsIfNeeded()
         }
@@ -76,4 +90,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environment(AppSettings())
 }

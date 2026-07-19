@@ -49,10 +49,12 @@ final class PlayerViewModel {
     /// Identifies the current slide so a superseded one can't clear the frame
     /// of a newer zap when its completion fires late.
     @ObservationIgnored private var slideGeneration = 0
+    @ObservationIgnored private let settings: AppSettings
 
-    init(channels: [Channel], initialChannel: Channel) {
+    init(channels: [Channel], initialChannel: Channel, settings: AppSettings) {
         self.channels = channels
         self.currentIndex = channels.firstIndex(of: initialChannel) ?? 0
+        self.settings = settings
     }
 
     /// The channel currently playing.
@@ -104,9 +106,9 @@ final class PlayerViewModel {
         currentIndex = (currentIndex + delta + channels.count) % channels.count
         onChannelChange?(currentChannel)
         play(currentChannel)
-        // Slide only when a frame was captured to cover the swap; otherwise a
-        // plain cut avoids flicking an empty layer across the screen.
-        if let snapshot {
+        // Slide only when enabled and a frame was captured to cover the swap;
+        // otherwise a plain cut avoids flicking an empty layer across the screen.
+        if let snapshot, settings.isChannelTransitionEnabled {
             beginZapSlide(snapshot: snapshot)
         }
         showBanner()
@@ -158,6 +160,7 @@ final class PlayerViewModel {
         teardownObservers()
 
         let item = AVPlayerItem(url: channel.streamURL)
+        applyQualityCap(to: item)
 
         // Tap the video frames so we can grab a still for the zap transition.
         let output = AVPlayerItemVideoOutput(
@@ -197,6 +200,18 @@ final class PlayerViewModel {
         }
 
         activePlayer.play()
+    }
+
+    /// Applies the user's optional quality cap to a freshly created item. `.auto`
+    /// leaves the defaults untouched so AVFoundation streams the best variant.
+    private func applyQualityCap(to item: AVPlayerItem) {
+        let quality = settings.videoQuality
+        if let maxResolution = quality.maximumResolution {
+            item.preferredMaximumResolution = maxResolution
+        }
+        if quality.peakBitRate > 0 {
+            item.preferredPeakBitRate = quality.peakBitRate
+        }
     }
 
     /// Grabs the frame currently on screen as a still image, used as the
