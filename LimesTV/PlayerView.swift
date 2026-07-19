@@ -26,27 +26,49 @@ struct PlayerView: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
-        VideoPlayer(player: viewModel.player)
+        GeometryReader { geometry in
+            ZStack {
+                VideoPlayer(player: viewModel.player)
+                    .offset(y: viewModel.playerOffset)
+
+                // Frozen last frame of the outgoing channel, sliding away. The
+                // black background keeps it fully opaque so the swapping player
+                // never shows through the letterbox margins.
+                if let snapshot = viewModel.outgoingSnapshot {
+                    Image(uiImage: snapshot)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .background(Color.black)
+                        .offset(y: viewModel.snapshotOffset)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
             .background(Color.black)
-            .ignoresSafeArea(edges: isLandscape ? .all : .bottom)
-            .overlay(alignment: .top) { channelBanner }
-            .animation(.default, value: viewModel.isShowingBanner)
-            .simultaneousGesture(channelSwipeGesture)
-            .navigationTitle(viewModel.currentChannel.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
-            .toolbarBackground(Color.black.opacity(0.5), for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .statusBarHidden(isLandscape)
-            .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
-            .onAppear {
-                viewModel.onChannelChange = { lastViewedChannel = $0 }
-                viewModel.start()
+            .clipped()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                viewModel.viewportHeight = height
             }
-            .onDisappear {
-                viewModel.stop()
-            }
+        }
+        .ignoresSafeArea(edges: isLandscape ? .all : .bottom)
+        .overlay(alignment: .top) { channelBanner }
+        .animation(.default, value: viewModel.isShowingBanner)
+        .simultaneousGesture(channelSwipeGesture)
+        .navigationTitle(viewModel.currentChannel.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
+        .toolbarBackground(Color.black.opacity(0.5), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .statusBarHidden(isLandscape)
+        .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
+        .onAppear {
+            viewModel.onChannelChange = { lastViewedChannel = $0 }
+            viewModel.start()
+        }
+        .onDisappear {
+            viewModel.stop()
+        }
     }
 
     /// Swipe up/down changes channel; swipe right goes back in landscape (where

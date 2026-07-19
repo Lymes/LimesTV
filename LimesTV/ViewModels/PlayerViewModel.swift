@@ -6,8 +6,11 @@
 //
 
 import AVKit
+import CoreImage
 import Foundation
 import Observation
+import SwiftUI
+import UIKit
 
 @MainActor
 @Observable
@@ -17,12 +20,32 @@ final class PlayerViewModel {
     private(set) var player: AVPlayer?
     private(set) var isShowingBanner = false
 
+    /// Direction of the last zap: +1 when moving to the next channel (swipe up),
+    /// -1 for the previous one (swipe down). Drives the slide transition.
+    private(set) var lastZapDirection = 1
+
+    /// Frozen last frame of the outgoing channel, shown on top of the (loading)
+    /// new channel while both slide across during a zap.
+    private(set) var outgoingSnapshot: UIImage?
+    /// Vertical offset of the live player layer during the zap slide.
+    private(set) var playerOffset: CGFloat = 0
+    /// Vertical offset of the frozen snapshot layer during the zap slide.
+    private(set) var snapshotOffset: CGFloat = 0
+
+    /// Height of the player viewport, provided by the view so the slide knows
+    /// how far off screen to start/finish.
+    @ObservationIgnored var viewportHeight: CGFloat = 0
+
+    private let slideDuration = 0.35
+
     /// Reports the channel currently on screen so the list can stay in sync.
     var onChannelChange: ((Channel) -> Void)?
 
     @ObservationIgnored private var stallObserver: NSObjectProtocol?
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
+    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
+    @ObservationIgnored private let ciContext = CIContext()
 
     init(channels: [Channel], initialChannel: Channel) {
         self.channels = channels
@@ -45,6 +68,8 @@ final class PlayerViewModel {
         teardownObservers()
         player?.pause()
         player = nil
+        videoOutput = nil
+        outgoingSnapshot = nil
     }
 
     // MARK: - Gestures
@@ -69,10 +94,51 @@ final class PlayerViewModel {
     /// Moves `delta` channels away (wrapping around) and reloads the player.
     private func changeChannel(by delta: Int) {
         guard channels.count > 1 else { return }
+        // Freeze the current frame before swapping the item so it can cover the
+        // new channel's load while both layers slide across.
+        let snapshot = snapshotCurrentFrame()
+        lastZapDirection = delta
         currentIndex = (currentIndex + delta + channels.count) % channels.count
         onChannelChange?(currentChannel)
         play(currentChannel)
+        // Slide only when a frame was captured to cover the swap; otherwise a
+        // plain cut avoids flicking an empty layer across the screen.
+        if let snapshot {
+            beginZapSlide(snapshot: snapshot)
+        }
         showBanner()
+    }
+
+    /// Runs the carousel slide: the frozen snapshot leaves one edge while the
+    /// live player enters from the opposite one, following the swipe direction.
+    ///
+    /// The starting positions (snapshot covering, player off screen) are applied
+    /// in the *same* update as the item swap, so no blank frame is ever shown;
+    /// the animation itself is kicked off on the next tick so those positions
+    /// render first.
+    private func beginZapSlide(snapshot: UIImage) {
+        guard viewportHeight > 0 else { return }
+        let height = viewportHeight
+        let goingUp = lastZapDirection > 0
+
+        var setup = Transaction()
+        setup.disablesAnimations = true
+        withTransaction(setup) {
+            outgoingSnapshot = snapshot
+            playerOffset = goingUp ? height : -height
+            snapshotOffset = 0
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            withAnimation(.easeInOut(duration: self.slideDuration)) {
+                self.playerOffset = 0
+                self.snapshotOffset = goingUp ? -height : height
+            } completion: { [weak self] in
+                self?.outgoingSnapshot = nil
+                self?.snapshotOffset = 0
+            }
+        }
     }
 
     /// Loads and starts playback of the given channel.
@@ -85,6 +151,14 @@ final class PlayerViewModel {
         teardownObservers()
 
         let item = AVPlayerItem(url: channel.streamURL)
+
+        // Tap the video frames so we can grab a still for the zap transition.
+        let output = AVPlayerItemVideoOutput(
+            pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        )
+        item.add(output)
+        videoOutput = output
+
         let activePlayer: AVPlayer
         if let player {
             activePlayer = player
@@ -116,6 +190,19 @@ final class PlayerViewModel {
         }
 
         activePlayer.play()
+    }
+
+    /// Grabs the frame currently on screen as a still image, used as the
+    /// outgoing layer of the zap slide.
+    private func snapshotCurrentFrame() -> UIImage? {
+        guard let videoOutput, let item = player?.currentItem else { return nil }
+        let time = item.currentTime()
+        guard let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else {
+            return nil
+        }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     private func teardownObservers() {
