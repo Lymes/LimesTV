@@ -36,18 +36,14 @@ final class PlayerViewModel {
     private let slideDuration = 0.35
 
     @ObservationIgnored private let initialChannel: Channel
-    @ObservationIgnored private let playback: PlaybackController
-    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private let playback = PlaybackController.shared
+    @ObservationIgnored private let settings = AppSettings.shared
 
     @ObservationIgnored private var slideGeneration = 0
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
 
-    init(initialChannel: Channel,
-         playback: PlaybackController = .shared,
-         settings: AppSettings = .shared) {
+    init(initialChannel: Channel) {
         self.initialChannel = initialChannel
-        self.playback = playback
-        self.settings = settings
     }
 
     /// The player and current channel come from the shared controller.

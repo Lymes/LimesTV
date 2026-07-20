@@ -7,6 +7,7 @@
 
 import CarPlay
 
+@MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private let coordinator = CarPlayCoordinator()
 

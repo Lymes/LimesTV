@@ -10,12 +10,8 @@ import CarPlay
 
 @MainActor
 final class CarPlayCoordinator {
-    private let playback: PlaybackController
+    private let playback = PlaybackController.shared
     private var interfaceController: CPInterfaceController?
-
-    init(playback: PlaybackController = .shared) {
-        self.playback = playback
-    }
 
     /// Called when the CarPlay screen connects: loads channels and shows the list.
     func attach(to interfaceController: CPInterfaceController) {

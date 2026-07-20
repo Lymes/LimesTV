@@ -28,7 +28,7 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                VideoPlayer(player: viewModel.player)
+                PlayerContainerView(player: viewModel.player)
                     .offset(y: viewModel.playerOffset)
 
                 // Frozen last frame of the outgoing channel, sliding away. The
