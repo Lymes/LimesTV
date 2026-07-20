@@ -4,6 +4,12 @@ A lightweight IPTV player for iOS, built with SwiftUI. Browse a grid of live TV
 channels, tap to watch, and "zap" between channels with a smooth carousel
 transition — with Picture in Picture and CarPlay support.
 
+## Screenshots
+
+| Channel grid | Player (landscape) |
+| :---: | :---: |
+| <img src="images/screenshot1.jpeg" alt="Channel grid" width="240"> | <img src="images/screenshot2.jpeg" alt="Player in landscape" width="440"> |
+
 ## Features
 
 - **Channel grid** — adaptive grid of channels with logos, loaded from bundled
