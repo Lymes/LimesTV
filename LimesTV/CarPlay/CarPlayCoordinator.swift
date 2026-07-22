@@ -11,7 +11,7 @@ import OSLog
 import UIKit
 
 @MainActor
-final class CarPlayCoordinator {
+final class CarPlayCoordinator: NSObject {
     private let playback = PlaybackController.shared
     private var interfaceController: CPInterfaceController?
     private let listTemplate = CPListTemplate(title: "LimesTV", sections: [])
@@ -21,6 +21,7 @@ final class CarPlayCoordinator {
     /// synchronously so CarPlay always has content, then fills in the channels.
     func attach(to interfaceController: CPInterfaceController) {
         self.interfaceController = interfaceController
+        interfaceController.delegate = self
         log.log("CarPlay didConnect")
 
         // Set the root template immediately: CarPlay shows a blank screen if the
@@ -30,6 +31,9 @@ final class CarPlayCoordinator {
             log.log("setRootTemplate success=\(success) error=\(String(describing: error))")
         }
 
+        // Mirror phone-app navigation onto the CarPlay stack.
+        observeRouter()
+
         Task {
             await playback.loadChannelsIfNeeded()
             log.log("Loaded \(self.playback.channels.count) channels")
@@ -38,6 +42,9 @@ final class CarPlayCoordinator {
             // Fill in the "on now" subtitles once the guide is available.
             await EPGStore.shared.loadIfNeeded()
             listTemplate.updateSections(makeSections())
+
+            // If the phone already has a channel open, reflect it here.
+            reconcileNowPlaying()
         }
     }
 
@@ -73,14 +80,61 @@ final class CarPlayCoordinator {
                 }
             }
         }
-        item.handler = { [weak self] _, completion in
-            guard let self else { completion(); return }
-            self.playback.play(channel)
-            self.interfaceController?.pushTemplate(CPNowPlayingTemplate.shared, animated: true) { [log = self.log] success, error in
-                log.log("pushTemplate NowPlaying success=\(success) error=\(String(describing: error))")
-            }
+        item.handler = { _, completion in
+            // Route through the shared path; the observer below reconciles both
+            // the phone player and the CarPlay Now Playing screen.
+            AppRouter.shared.openChannel(channel)
             completion()
         }
         return item
+    }
+
+    // MARK: - Navigation sync
+
+    /// Observes the shared navigation path and mirrors it onto the CarPlay stack,
+    /// so opening/closing a channel on the phone pushes/pops Now Playing here too
+    /// (and vice versa, since a CarPlay tap sets the same path).
+    private func observeRouter() {
+        withObservationTracking {
+            _ = AppRouter.shared.path
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.interfaceController != nil else { return }
+                self.reconcileNowPlaying()
+                self.observeRouter()
+            }
+        }
+    }
+
+    private func reconcileNowPlaying() {
+        guard let interfaceController else { return }
+        let selectedChannel = AppRouter.shared.path.last
+        let nowPlayingOnTop = interfaceController.topTemplate === CPNowPlayingTemplate.shared
+
+        if let channel = selectedChannel {
+            if playback.currentChannel?.id != channel.id {
+                playback.play(channel)
+            }
+            if !nowPlayingOnTop {
+                interfaceController.pushTemplate(CPNowPlayingTemplate.shared, animated: true) { [log] success, error in
+                    log.log("pushTemplate NowPlaying success=\(success) error=\(String(describing: error))")
+                }
+            }
+        } else if nowPlayingOnTop {
+            interfaceController.popTemplate(animated: true) { [log] success, error in
+                log.log("popTemplate NowPlaying success=\(success) error=\(String(describing: error))")
+            }
+        }
+    }
+}
+
+extension CarPlayCoordinator: CPInterfaceControllerDelegate {
+    /// When the Now Playing template is popped (back on CarPlay), pop the phone
+    /// app's player too so the two stay in sync.
+    nonisolated func templateDidDisappear(_ aTemplate: CPTemplate, animated: Bool) {
+        MainActor.assumeIsolated {
+            guard aTemplate === CPNowPlayingTemplate.shared else { return }
+            AppRouter.shared.path.removeAll()
+        }
     }
 }

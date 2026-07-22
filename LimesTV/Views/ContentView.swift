@@ -13,7 +13,8 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var viewModel = viewModel
-        NavigationStack {
+        @Bindable var router = AppRouter.shared
+        NavigationStack(path: $router.path) {
             Group {
                 if viewModel.isLoading {
                     ProgressView("Loading channels…")
