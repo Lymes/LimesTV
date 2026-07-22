@@ -32,6 +32,7 @@ final class PlaybackController {
     @ObservationIgnored private let service = PlaylistService()
     @ObservationIgnored private var stallObserver: NSObjectProtocol?
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
+    @ObservationIgnored private var timeControlObserver: NSKeyValueObservation?
     @ObservationIgnored private var remoteCommandsConfigured = false
 
     init(settings: AppSettings) {
@@ -76,6 +77,8 @@ final class PlaybackController {
 
     func stop() {
         teardownObservers()
+        timeControlObserver?.invalidate()
+        timeControlObserver = nil
         player?.pause()
         player = nil
     }
@@ -106,6 +109,12 @@ final class PlaybackController {
             activePlayer.allowsExternalPlayback = true
             activePlayer.usesExternalPlaybackWhileExternalScreenIsActive = true
             player = activePlayer
+
+            // Keep Now Playing (and thus CarPlay) in sync with play/pause,
+            // whichever front-end triggered it.
+            timeControlObserver = activePlayer.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor in self?.updateNowPlayingPlaybackState() }
+            }
         }
 
         // Kick off playback only once the item is actually ready.
@@ -169,6 +178,17 @@ final class PlaybackController {
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
+    }
+
+    /// Mirrors the player's actual play/pause state into Now Playing so both the
+    /// phone player and the CarPlay Now Playing screen show the same state.
+    private func updateNowPlayingPlaybackState() {
+        guard let player else { return }
+        let isPlaying = player.timeControlStatus == .playing
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     private func configureRemoteCommandsIfNeeded() {

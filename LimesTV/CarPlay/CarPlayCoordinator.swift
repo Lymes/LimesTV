@@ -17,6 +17,15 @@ final class CarPlayCoordinator: NSObject {
     private let listTemplate = CPListTemplate(title: "LimesTV", sections: [])
     private let log = Logger(subsystem: "com.lymes.LimesTV", category: "CarPlay")
 
+    /// Rendered tiles cached by channel id so periodic EPG refreshes don't
+    /// re-render every logo.
+    private var tileCache: [String: UIImage] = [:]
+    private lazy var fallbackTile = UIImage(named: "LimeLogo")?.channelTile(size: iconSize)
+
+    /// Periodic "on now" refresh, rebuilding the list only when it changes.
+    private var epgRefreshTask: Task<Void, Never>?
+    private var lastEPGSignature = 0
+
     /// Called when the CarPlay screen connects. Sets the root template
     /// synchronously so CarPlay always has content, then fills in the channels.
     func attach(to interfaceController: CPInterfaceController) {
@@ -42,6 +51,8 @@ final class CarPlayCoordinator: NSObject {
             // Fill in the "on now" subtitles once the guide is available.
             await EPGStore.shared.loadIfNeeded()
             listTemplate.updateSections(makeSections())
+            lastEPGSignature = currentProgrammeSignature()
+            startEPGRefreshTimer()
 
             // If the phone already has a channel open, reflect it here.
             reconcileNowPlaying()
@@ -49,6 +60,8 @@ final class CarPlayCoordinator: NSObject {
     }
 
     func detach() {
+        epgRefreshTask?.cancel()
+        epgRefreshTask = nil
         interfaceController = nil
     }
 
@@ -71,12 +84,18 @@ final class CarPlayCoordinator: NSObject {
         // Prefer the programme on air now; fall back to the channel's group.
         let detailText = EPGStore.shared.currentProgramme(for: channel)?.title ?? channel.group
         let item = CPListItem(text: channel.name, detailText: detailText)
-        // Show the app logo immediately, then swap in the channel logo once loaded.
-        item.setImage(UIImage(named: "LimeLogo")?.channelTile(size: iconSize))
-        if let logoURL = channel.logoURL {
-            Task {
-                if let image = await ChannelLogoLoader.shared.image(for: logoURL) {
-                    item.setImage(image.channelTile(size: self.iconSize))
+        if let cached = tileCache[channel.id] {
+            item.setImage(cached)
+        } else {
+            // Show the app logo immediately, then swap in the channel logo once loaded.
+            item.setImage(fallbackTile)
+            if let logoURL = channel.logoURL {
+                Task {
+                    if let image = await ChannelLogoLoader.shared.image(for: logoURL) {
+                        let tile = image.channelTile(size: self.iconSize)
+                        self.tileCache[channel.id] = tile
+                        item.setImage(tile)
+                    }
                 }
             }
         }
@@ -87,6 +106,39 @@ final class CarPlayCoordinator: NSObject {
             completion()
         }
         return item
+    }
+
+    // MARK: - Live EPG refresh
+
+    /// Rebuilds the list roughly once a minute, but only when the "on now"
+    /// programmes actually changed, to keep subtitles current without churn.
+    private func startEPGRefreshTimer() {
+        epgRefreshTask?.cancel()
+        epgRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
+                self?.refreshEPGIfChanged()
+            }
+        }
+    }
+
+    private func refreshEPGIfChanged() {
+        let signature = currentProgrammeSignature()
+        guard signature != lastEPGSignature else { return }
+        lastEPGSignature = signature
+        listTemplate.updateSections(makeSections())
+    }
+
+    /// A hash of every channel's current programme title, used to detect when
+    /// the guide's "on now" state has moved on.
+    private func currentProgrammeSignature() -> Int {
+        var hasher = Hasher()
+        for channel in playback.channels {
+            hasher.combine(channel.id)
+            hasher.combine(EPGStore.shared.currentProgramme(for: channel)?.title ?? "")
+        }
+        return hasher.finalize()
     }
 
     // MARK: - Navigation sync

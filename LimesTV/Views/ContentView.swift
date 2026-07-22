@@ -78,19 +78,23 @@ struct ContentView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(viewModel.filteredChannels) { channel in
-                            NavigationLink(value: channel) {
-                                ChannelCell(viewModel: ChannelCellViewModel(
-                                    channel: channel,
-                                    programme: viewModel.currentProgramme(for: channel)
-                                ))
+                    // Re-render each minute so the "on now" title and progress
+                    // bar on every cell stay current.
+                    TimelineView(.periodic(from: .now, by: 60)) { _ in
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(viewModel.filteredChannels) { channel in
+                                NavigationLink(value: channel) {
+                                    ChannelCell(viewModel: ChannelCellViewModel(
+                                        channel: channel,
+                                        programme: viewModel.currentProgramme(for: channel)
+                                    ))
+                                }
+                                .buttonStyle(.plain)
+                                .id(channel.id)
                             }
-                            .buttonStyle(.plain)
-                            .id(channel.id)
                         }
+                        .padding()
                     }
-                    .padding()
                 }
                 // Keep the list aligned with the channel last watched in the player.
                 .onChange(of: viewModel.lastViewedChannel) { _, newValue in
