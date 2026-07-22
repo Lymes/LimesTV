@@ -23,12 +23,30 @@ final class EPGStore {
     private var programmesByKey: [String: [EPGProgramme]] = [:]
 
     @ObservationIgnored private let service = EPGService()
+    @ObservationIgnored private var loadTask: Task<Bool, Never>?
 
-    /// Downloads and indexes the latest guide. Throws on failure.
-    func refresh() async throws {
-        let guide = try await service.fetchGuide()
-        programmesByKey = Self.indexByChannelName(guide)
-        isLoaded = true
+    /// Loads the guide once per session, de-duplicating concurrent callers (the
+    /// phone grid and the CarPlay scene both trigger this). Returns whether a
+    /// guide is available afterwards.
+    @discardableResult
+    func loadIfNeeded() async -> Bool {
+        if isLoaded { return true }
+        if let loadTask { return await loadTask.value }
+
+        let task = Task { () -> Bool in
+            do {
+                let guide = try await service.fetchGuide()
+                programmesByKey = Self.indexByChannelName(guide)
+                isLoaded = true
+                return true
+            } catch {
+                return false
+            }
+        }
+        loadTask = task
+        let result = await task.value
+        loadTask = nil
+        return result
     }
 
     // MARK: - Lookups

@@ -34,6 +34,10 @@ final class CarPlayCoordinator {
             await playback.loadChannelsIfNeeded()
             log.log("Loaded \(self.playback.channels.count) channels")
             listTemplate.updateSections(makeSections())
+
+            // Fill in the "on now" subtitles once the guide is available.
+            await EPGStore.shared.loadIfNeeded()
+            listTemplate.updateSections(makeSections())
         }
     }
 
@@ -57,7 +61,9 @@ final class CarPlayCoordinator {
     private let iconSize = CGSize(width: 88, height: 88)
 
     private func makeListItem(for channel: Channel) -> CPListItem {
-        let item = CPListItem(text: channel.name, detailText: channel.group)
+        // Prefer the programme on air now; fall back to the channel's group.
+        let detailText = EPGStore.shared.currentProgramme(for: channel)?.title ?? channel.group
+        let item = CPListItem(text: channel.name, detailText: detailText)
         // Show the app logo immediately, then swap in the channel logo once loaded.
         item.setImage(UIImage(named: "LimeLogo")?.channelTile(size: iconSize))
         if let logoURL = channel.logoURL {

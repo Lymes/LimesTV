@@ -7,9 +7,6 @@
 
 import Foundation
 import Observation
-import OSLog
-
-private let epgLog = Logger(subsystem: "com.lymes.LimesTV", category: "EPG")
 
 @MainActor
 @Observable
@@ -65,13 +62,8 @@ final class ContentViewModel {
     /// Downloads and parses the programme guide, then indexes it for the cells.
     /// Safe to run concurrently with channel loading; never blocks the UI.
     func loadEPG() async {
-        do {
-            try await EPGStore.shared.refresh()
-            showToast("Guida TV aggiornata")
-        } catch {
-            epgLog.error("loadEPG failed: \(String(describing: error), privacy: .public)")
-            showToast("Guida TV non disponibile")
-        }
+        let loaded = await EPGStore.shared.loadIfNeeded()
+        showToast(loaded ? "Guida TV aggiornata" : "Guida TV non disponibile")
     }
 
     /// The programme currently on air for `channel`, if the guide covers it.
