@@ -8,9 +8,11 @@
 	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<!-- Allow all insecure loads: HLS streams and the EPG guide are served
+		     over plain HTTP. NSAllowsArbitraryLoadsForMedia must NOT be set here:
+		     on iOS 10+ any granular key makes the system ignore the global
+		     NSAllowsArbitraryLoads, which would then block the EPG download. -->
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsArbitraryLoadsForMedia</key>
 		<true/>
 	</dict>
 	<key>UIBackgroundModes</key>

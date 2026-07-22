@@ -18,6 +18,9 @@ import SwiftUI
 final class PlayerViewModel {
     private(set) var isShowingBanner = false
 
+    /// Whether the schedule (palinsesto) sheet is presented.
+    var isShowingSchedule = false
+
     // MARK: - Interactive carousel state
 
     /// Vertical offset of the live player layer. Follows the finger during a
@@ -39,6 +42,7 @@ final class PlayerViewModel {
     @ObservationIgnored private let initialChannel: Channel
     @ObservationIgnored private let playback = PlaybackController.shared
     @ObservationIgnored private let settings = AppSettings.shared
+    @ObservationIgnored private let epg = EPGStore.shared
 
     /// Bumped on every gesture so a stale animation completion can bail out.
     @ObservationIgnored private var interactionGeneration = 0
@@ -54,6 +58,47 @@ final class PlayerViewModel {
     /// The player and current channel come from the shared controller.
     var player: AVPlayer? { playback.player }
     var currentChannel: Channel { playback.currentChannel ?? initialChannel }
+
+    // MARK: - Programme guide (EPG)
+
+    /// Full schedule for the current channel, for the palinsesto sheet.
+    var scheduleProgrammes: [EPGProgramme] { epg.programmes(for: currentChannel) }
+
+    /// Whether the current channel has any guide data (drives the button/status).
+    var hasSchedule: Bool { !scheduleProgrammes.isEmpty }
+
+    /// A one-line "now / next" summary, e.g.
+    /// "Adesso: Tg1 · mancano 12 min · Prossimo: Porta a Porta alle 23:20".
+    /// Returns `nil` when the guide doesn't cover this channel.
+    func statusLine(at date: Date) -> String? {
+        let current = epg.currentProgramme(for: currentChannel, at: date)
+        let next = epg.nextProgramme(for: currentChannel, at: date)
+        guard current != nil || next != nil else { return nil }
+
+        var parts: [String] = []
+        if let current {
+            parts.append("Adesso: \(current.title)")
+            let remaining = current.stop.timeIntervalSince(date)
+            if remaining > 0 { parts.append("mancano \(Self.remainingString(remaining))") }
+        }
+        if let next {
+            parts.append("Prossimo: \(next.title) alle \(Self.timeFormatter.string(from: next.start))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func remainingString(_ interval: TimeInterval) -> String {
+        let minutes = max(0, Int(interval / 60))
+        if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m" }
+        return "\(minutes) min"
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "it_IT")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     // MARK: - Lifecycle
 

@@ -23,6 +23,20 @@ struct ChannelCell: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
+
+            if let programmeTitle = viewModel.programmeTitle {
+                Text(programmeTitle)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+
+                if let progress = viewModel.programmeProgress {
+                    ProgressView(value: progress)
+                        .progressViewStyle(.linear)
+                        .tint(.green)
+                }
+            }
         }
     }
 

@@ -26,6 +26,7 @@ struct PlayerView: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
+        @Bindable var viewModel = viewModel
         GeometryReader { geometry in
             ZStack {
                 PlayerContainerView(player: viewModel.player)
@@ -49,8 +50,15 @@ struct PlayerView: View {
         }
         .ignoresSafeArea(edges: isLandscape ? .all : .bottom)
         .overlay(alignment: .top) { channelBanner }
+        .overlay(alignment: .bottom) { epgPanel }
         .animation(.default, value: viewModel.isShowingBanner)
         .simultaneousGesture(channelSwipeGesture)
+        .sheet(isPresented: $viewModel.isShowingSchedule) {
+            ScheduleView(viewModel: ScheduleViewModel(
+                channelName: viewModel.currentChannel.name,
+                programmes: viewModel.scheduleProgrammes
+            ))
+        }
         .navigationTitle(viewModel.currentChannel.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
@@ -83,6 +91,39 @@ struct PlayerView: View {
                     dismiss()
                 }
             }
+    }
+
+    /// Bottom panel (portrait only) with the "now / next" line and a button that
+    /// opens the full schedule. Refreshes every 30s so the countdown stays live.
+    @ViewBuilder
+    private var epgPanel: some View {
+        if !isLandscape && viewModel.hasSchedule {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                if let status = viewModel.statusLine(at: context.date) {
+                    Button {
+                        viewModel.isShowingSchedule = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(status)
+                                .font(.footnote)
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                }
+            }
+        }
     }
 
     /// A brief overlay showing the channel name when switching.

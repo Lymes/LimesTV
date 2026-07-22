@@ -51,8 +51,20 @@ struct ContentView: View {
         .sheet(isPresented: $viewModel.isShowingSettings) {
             SettingsView(settings: appSettings)
         }
+        .overlay(alignment: .bottom) {
+            if let toast = viewModel.toastMessage {
+                ToastView(message: toast)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.toastMessage)
         .task {
             await viewModel.loadChannelsIfNeeded()
+        }
+        .task {
+            // Refresh the programme guide on every launch, without blocking the UI.
+            await viewModel.loadEPG()
         }
     }
 
@@ -68,7 +80,10 @@ struct ContentView: View {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(viewModel.filteredChannels) { channel in
                             NavigationLink(value: channel) {
-                                ChannelCell(viewModel: ChannelCellViewModel(channel: channel))
+                                ChannelCell(viewModel: ChannelCellViewModel(
+                                    channel: channel,
+                                    programme: viewModel.currentProgramme(for: channel)
+                                ))
                             }
                             .buttonStyle(.plain)
                             .id(channel.id)

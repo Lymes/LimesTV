@@ -7,6 +7,9 @@
 
 import Foundation
 import Observation
+import OSLog
+
+private let epgLog = Logger(subsystem: "com.lymes.LimesTV", category: "EPG")
 
 @MainActor
 @Observable
@@ -22,7 +25,12 @@ final class ContentViewModel {
     /// Whether the settings sheet is presented.
     var isShowingSettings = false
 
+    /// Transient message shown at the bottom of the screen; `nil` hides it.
+    private(set) var toastMessage: String?
+
     private let service: PlaylistService
+
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     init(service: PlaylistService = PlaylistService()) {
         self.service = service
@@ -50,5 +58,34 @@ final class ContentViewModel {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    // MARK: - Programme guide (EPG)
+
+    /// Downloads and parses the programme guide, then indexes it for the cells.
+    /// Safe to run concurrently with channel loading; never blocks the UI.
+    func loadEPG() async {
+        do {
+            try await EPGStore.shared.refresh()
+            showToast("Guida TV aggiornata")
+        } catch {
+            epgLog.error("loadEPG failed: \(String(describing: error), privacy: .public)")
+            showToast("Guida TV non disponibile")
+        }
+    }
+
+    /// The programme currently on air for `channel`, if the guide covers it.
+    func currentProgramme(for channel: Channel) -> EPGProgramme? {
+        EPGStore.shared.currentProgramme(for: channel)
+    }
+
+    private func showToast(_ message: String) {
+        toastTask?.cancel()
+        toastMessage = message
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.toastMessage = nil
+        }
     }
 }
