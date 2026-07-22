@@ -52,14 +52,18 @@ final class CarPlayCoordinator {
         }
     }
 
+    /// Uniform footprint for every list icon, so logos of different sizes and
+    /// aspect ratios line up neatly.
+    private let iconSize = CGSize(width: 88, height: 88)
+
     private func makeListItem(for channel: Channel) -> CPListItem {
         let item = CPListItem(text: channel.name, detailText: channel.group)
         // Show the app logo immediately, then swap in the channel logo once loaded.
-        item.setImage(UIImage(named: "LimeLogo"))
+        item.setImage(UIImage(named: "LimeLogo")?.channelTile(size: iconSize))
         if let logoURL = channel.logoURL {
             Task {
                 if let image = await ChannelLogoLoader.shared.image(for: logoURL) {
-                    item.setImage(image)
+                    item.setImage(image.channelTile(size: self.iconSize))
                 }
             }
         }
