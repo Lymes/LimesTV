@@ -29,25 +29,22 @@ struct PlayerView: View {
         GeometryReader { geometry in
             ZStack {
                 PlayerContainerView(player: viewModel.player)
-                    .offset(y: viewModel.playerOffset)
+                    .offset(y: viewModel.currentOffset)
 
-                // Frozen last frame of the outgoing channel, sliding away. The
-                // black background keeps it fully opaque so the swapping player
-                // never shows through the letterbox margins.
-                if let snapshot = viewModel.outgoingSnapshot {
-                    Image(uiImage: snapshot)
-                        .resizable()
-                        .scaledToFit()
+                // Preview of the neighbouring channel, trailing the finger in
+                // from the opposite edge during an interactive zap drag.
+                if let incoming = viewModel.incomingChannel {
+                    ChannelPreviewView(viewModel: ChannelCellViewModel(channel: incoming))
                         .frame(width: geometry.size.width, height: geometry.size.height)
-                        .background(Color.black)
-                        .offset(y: viewModel.snapshotOffset)
+                        .offset(y: viewModel.incomingOffset)
+                        .opacity(viewModel.incomingOpacity)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .background(Color.black)
             .clipped()
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                viewModel.viewportHeight = height
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+                viewModel.viewportSize = size
             }
         }
         .ignoresSafeArea(edges: isLandscape ? .all : .bottom)
@@ -73,12 +70,16 @@ struct PlayerView: View {
         }
     }
 
-    /// Swipe up/down changes channel; swipe right goes back in landscape (where
-    /// the system edge-swipe is disabled because the navigation bar is hidden).
+    /// Drag up/down to zap: the video follows the finger and snaps back or
+    /// completes on release. A rightward swipe goes back in landscape (where the
+    /// system edge-swipe is disabled because the navigation bar is hidden).
     private var channelSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 30)
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                viewModel.dragChanged(translation: value.translation)
+            }
             .onEnded { value in
-                if viewModel.handleSwipe(translation: value.translation, isLandscape: isLandscape) {
+                if viewModel.dragEnded(translation: value.translation, isLandscape: isLandscape) {
                     dismiss()
                 }
             }

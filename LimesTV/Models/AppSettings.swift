@@ -62,7 +62,8 @@ final class AppSettings {
         didSet { defaults.set(videoQuality.rawValue, forKey: Keys.videoQuality) }
     }
 
-    /// Whether zapping plays the sliding carousel transition.
+    /// Whether zapping uses the interactive drag carousel. When off, a swipe
+    /// changes channel instantly with no finger-following slide.
     var isChannelTransitionEnabled: Bool {
         didSet { defaults.set(isChannelTransitionEnabled, forKey: Keys.channelTransition) }
     }

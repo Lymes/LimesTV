@@ -6,15 +6,18 @@
 //
 
 import CarPlay
+import OSLog
 
 @MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private let coordinator = CarPlayCoordinator()
+    private let log = Logger(subsystem: "com.lymes.LimesTV", category: "CarPlay")
 
     func templateApplicationScene(
         _ templateApplicationScene: CPTemplateApplicationScene,
         didConnect interfaceController: CPInterfaceController
     ) {
+        log.log("CarPlaySceneDelegate didConnect")
         coordinator.attach(to: interfaceController)
     }
 

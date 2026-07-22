@@ -2,45 +2,50 @@
 //  PlayerViewModel.swift
 //  LimesTV
 //
-//  Drives PlayerView: the phone-only carousel zap transition and banner. Actual
-//  playback and channel zapping are delegated to the shared PlaybackController.
+//  Drives PlayerView: the phone-only interactive zap carousel and banner. The
+//  live video follows the finger; releasing past the halfway point commits the
+//  channel change, otherwise it snaps back. Actual playback and channel zapping
+//  are delegated to the shared PlaybackController.
 //
 
 import AVKit
 import Foundation
 import Observation
 import SwiftUI
-import UIKit
 
 @MainActor
 @Observable
 final class PlayerViewModel {
     private(set) var isShowingBanner = false
 
-    /// Direction of the last zap: +1 for the next channel (swipe up), -1 for the
-    /// previous one (swipe down). Drives the slide transition.
-    private var lastZapDirection = 1
+    // MARK: - Interactive carousel state
 
-    /// Frozen last frame of the outgoing channel, shown on top of the (loading)
-    /// new channel while both slide across during a zap.
-    private(set) var outgoingSnapshot: UIImage?
-    /// Vertical offset of the live player layer during the zap slide.
-    private(set) var playerOffset: CGFloat = 0
-    /// Vertical offset of the frozen snapshot layer during the zap slide.
-    private(set) var snapshotOffset: CGFloat = 0
+    /// Vertical offset of the live player layer. Follows the finger during a
+    /// drag; animates to 0 (snap back) or one viewport away (commit).
+    private(set) var currentOffset: CGFloat = 0
+    /// The neighbouring channel previewed on the incoming side while dragging,
+    /// or `nil` when at rest. Not a live stream — shown as a logo/name card
+    /// until the zap is committed and the player loads it.
+    private(set) var incomingChannel: Channel?
+    /// Vertical offset of the incoming preview card.
+    private(set) var incomingOffset: CGFloat = 0
+    /// Opacity of the incoming preview card, faded out once the new stream is in.
+    private(set) var incomingOpacity: Double = 1
 
-    /// Height of the player viewport, provided by the view so the slide knows
-    /// how far off screen to start/finish.
-    @ObservationIgnored var viewportHeight: CGFloat = 0
-
-    private let slideDuration = 0.35
+    /// Size of the player viewport, provided by the view so the drag knows how
+    /// far a full page is.
+    @ObservationIgnored var viewportSize: CGSize = .zero
 
     @ObservationIgnored private let initialChannel: Channel
     @ObservationIgnored private let playback = PlaybackController.shared
     @ObservationIgnored private let settings = AppSettings.shared
 
-    @ObservationIgnored private var slideGeneration = 0
+    /// Bumped on every gesture so a stale animation completion can bail out.
+    @ObservationIgnored private var interactionGeneration = 0
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
+
+    /// Fraction of the viewport the drag must pass to commit the channel change.
+    private let commitThreshold: CGFloat = 0.5
 
     init(initialChannel: Channel) {
         self.initialChannel = initialChannel
@@ -62,74 +67,127 @@ final class PlayerViewModel {
     func stop() {
         bannerTask?.cancel()
         playback.stop()
-        outgoingSnapshot = nil
+        resetInteraction()
     }
 
     // MARK: - Gestures
 
-    /// Handles a drag gesture. Swipe up/down zaps channels; a rightward swipe in
-    /// landscape requests dismissal. Returns `true` when the view should dismiss.
-    func handleSwipe(translation: CGSize, isLandscape: Bool) -> Bool {
-        let dy = translation.height
-        let dx = translation.width
-        if abs(dy) > abs(dx) {
-            guard abs(dy) > 50 else { return false }
-            zap(by: dy < 0 ? 1 : -1)
+    /// Live drag update. Moves the video with the finger and previews the
+    /// neighbour it would zap to. Horizontal drags are ignored here so they can
+    /// be handled as a dismiss on release.
+    func dragChanged(translation: CGSize) {
+        guard settings.isChannelTransitionEnabled else { return }
+        guard abs(translation.height) >= abs(translation.width) else { return }
+        let height = viewportSize.height
+        guard height > 0 else { return }
+
+        // Follow the finger, clamped to a single page in either direction.
+        let offset = max(-height, min(height, translation.height))
+        currentOffset = offset
+
+        let delta = offset < 0 ? 1 : (offset > 0 ? -1 : 0)
+        if delta == 0 {
+            incomingChannel = nil
+            return
+        }
+        incomingChannel = playback.channel(offsetBy: delta)
+        // The preview enters from the opposite edge, trailing the finger.
+        incomingOffset = (offset < 0 ? height : -height) + offset
+        incomingOpacity = 1
+    }
+
+    /// Drag release. Returns `true` when the view should dismiss (rightward
+    /// swipe in landscape). Otherwise commits or cancels the zap.
+    func dragEnded(translation: CGSize, isLandscape: Bool) -> Bool {
+        // Horizontal gesture: dismiss in landscape, and undo any partial drag.
+        if abs(translation.width) > abs(translation.height) {
+            if !currentOffset.isZero { cancelZap() }
+            return isLandscape && translation.width > 80
+        }
+
+        guard settings.isChannelTransitionEnabled else {
+            // Non-interactive fallback: a decisive swipe zaps instantly.
+            if abs(translation.height) > 50 {
+                zapInstantly(by: translation.height < 0 ? 1 : -1)
+            }
             return false
-        } else if isLandscape, dx > 80 {
-            return true
+        }
+
+        let height = viewportSize.height
+        guard height > 0, incomingChannel != nil else {
+            cancelZap()
+            return false
+        }
+
+        let progress = abs(currentOffset) / height
+        if progress >= commitThreshold {
+            commitZap(delta: currentOffset < 0 ? 1 : -1)
+        } else {
+            cancelZap()
         }
         return false
     }
 
-    // MARK: - Zapping
+    // MARK: - Zap resolution
 
-    private func zap(by delta: Int) {
-        // Freeze the current frame before swapping so it can cover the new
-        // channel's load while both layers slide across.
-        let snapshot = playback.snapshotCurrentFrame()
-        lastZapDirection = delta
-        playback.changeChannel(by: delta)
-        if let snapshot, settings.isChannelTransitionEnabled {
-            beginZapSlide(snapshot: snapshot)
+    /// Finishes the carousel move, then swaps the live stream underneath the
+    /// preview card and fades the card out once the new channel is playing.
+    private func commitZap(delta: Int) {
+        let height = viewportSize.height
+        interactionGeneration += 1
+        let generation = interactionGeneration
+
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            currentOffset = delta > 0 ? -height : height
+            incomingOffset = 0
+        } completion: { [weak self] in
+            guard let self, self.interactionGeneration == generation else { return }
+            self.playback.changeChannel(by: delta)
+
+            // The live player is now on the new channel; drop it back to centre
+            // beneath the still-covering preview card, without animating.
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) { self.currentOffset = 0 }
+
+            // Reveal the (loading) live channel by fading the card away.
+            withAnimation(.easeOut(duration: 0.25)) {
+                self.incomingOpacity = 0
+            } completion: { [weak self] in
+                guard let self, self.interactionGeneration == generation else { return }
+                self.resetInteraction()
+            }
         }
         showBanner()
     }
 
-    /// Runs the carousel slide: the frozen snapshot leaves one edge while the
-    /// live player enters from the opposite one, following the swipe direction.
-    ///
-    /// The starting positions (snapshot covering, player off screen) are applied
-    /// in the *same* update as the item swap, so no blank frame is ever shown;
-    /// the animation itself is kicked off on the next tick so those positions
-    /// render first.
-    private func beginZapSlide(snapshot: UIImage) {
-        guard viewportHeight > 0 else { return }
-        let height = viewportHeight
-        let goingUp = lastZapDirection > 0
-        slideGeneration += 1
-        let generation = slideGeneration
+    /// Snaps everything back to the current channel with no change.
+    private func cancelZap() {
+        let height = viewportSize.height
+        interactionGeneration += 1
+        let generation = interactionGeneration
+        let delta = currentOffset < 0 ? 1 : -1
 
-        var setup = Transaction()
-        setup.disablesAnimations = true
-        withTransaction(setup) {
-            outgoingSnapshot = snapshot
-            playerOffset = goingUp ? height : -height
-            snapshotOffset = 0
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            currentOffset = 0
+            incomingOffset = delta > 0 ? height : -height
+        } completion: { [weak self] in
+            guard let self, self.interactionGeneration == generation else { return }
+            self.resetInteraction()
         }
+    }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            withAnimation(.easeInOut(duration: self.slideDuration)) {
-                self.playerOffset = 0
-                self.snapshotOffset = goingUp ? -height : height
-            } completion: { [weak self] in
-                // Ignore if a newer zap has already taken over the slide.
-                guard let self, self.slideGeneration == generation else { return }
-                self.outgoingSnapshot = nil
-                self.snapshotOffset = 0
-            }
-        }
+    /// Immediate channel change used when the interactive carousel is disabled.
+    private func zapInstantly(by delta: Int) {
+        playback.changeChannel(by: delta)
+        showBanner()
+    }
+
+    private func resetInteraction() {
+        currentOffset = 0
+        incomingOffset = 0
+        incomingOpacity = 1
+        incomingChannel = nil
     }
 
     // MARK: - Banner

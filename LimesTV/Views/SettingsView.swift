@@ -32,9 +32,9 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Channel change animation", isOn: $viewModel.isChannelTransitionEnabled)
+                    Toggle("Interactive channel carousel", isOn: $viewModel.isChannelTransitionEnabled)
                 } footer: {
-                    Text("Slide transition when zapping between channels.")
+                    Text("Drag the video up or down to zap: release past halfway to change channel, or let go to snap back. When off, a swipe changes channel instantly.")
                 }
             }
             .navigationTitle("Settings")

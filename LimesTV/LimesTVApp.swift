@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct LimesTVApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     // Shared with the CarPlay scene and the PlaybackController.
     @State private var settings = AppSettings.shared
 

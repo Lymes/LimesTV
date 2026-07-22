@@ -8,7 +8,6 @@
 //
 
 import AVKit
-import CoreImage
 import Foundation
 import MediaPlayer
 import Observation
@@ -33,8 +32,6 @@ final class PlaybackController {
     @ObservationIgnored private let service = PlaylistService()
     @ObservationIgnored private var stallObserver: NSObjectProtocol?
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
-    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
-    @ObservationIgnored private let ciContext = CIContext()
     @ObservationIgnored private var remoteCommandsConfigured = false
 
     init(settings: AppSettings) {
@@ -68,11 +65,19 @@ final class PlaybackController {
     func next() { changeChannel(by: 1) }
     func previous() { changeChannel(by: -1) }
 
+    /// Returns the channel `delta` positions away from the current one, wrapping
+    /// around, without changing playback. Used to preview the neighbour channel
+    /// during an interactive zap drag.
+    func channel(offsetBy delta: Int) -> Channel? {
+        guard channels.count > 1 else { return nil }
+        let index = (currentIndex + delta + channels.count) % channels.count
+        return channels[index]
+    }
+
     func stop() {
         teardownObservers()
         player?.pause()
         player = nil
-        videoOutput = nil
     }
 
     /// Loads and starts playback of the current channel. A single `AVPlayer` is
@@ -87,13 +92,6 @@ final class PlaybackController {
         let item = AVPlayerItem(url: channel.streamURL)
         applyQualityCap(to: item)
 
-        // Tap the video frames so the phone carousel can grab a still.
-        let output = AVPlayerItemVideoOutput(
-            pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        )
-        item.add(output)
-        videoOutput = output
-
         let activePlayer: AVPlayer
         if let player {
             activePlayer = player
@@ -103,6 +101,10 @@ final class PlaybackController {
             // Don't wait to minimise stalls, otherwise the player can show the
             // first frame and then wait forever instead of starting playback.
             activePlayer.automaticallyWaitsToMinimizeStalling = false
+            // Allow AirPlay video routing so a parked, video-capable CarPlay
+            // vehicle can show the stream on the car display.
+            activePlayer.allowsExternalPlayback = true
+            activePlayer.usesExternalPlaybackWhileExternalScreenIsActive = true
             player = activePlayer
         }
 
@@ -146,28 +148,27 @@ final class PlaybackController {
         }
     }
 
-    // MARK: - Frame capture (phone carousel)
-
-    /// Grabs the frame currently on screen as a still image.
-    func snapshotCurrentFrame() -> UIImage? {
-        guard let videoOutput, let item = player?.currentItem else { return nil }
-        let time = item.currentTime()
-        guard let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else {
-            return nil
-        }
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
-
     // MARK: - Now Playing / remote commands
 
     private func updateNowPlaying() {
         guard let channel = currentChannel else { return }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [
             MPMediaItemPropertyTitle: channel.name,
-            MPNowPlayingInfoPropertyIsLiveStream: true
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue
         ]
+
+        // Attach the channel logo as artwork once it has loaded, unless the user
+        // has already zapped to a different channel in the meantime.
+        guard let logoURL = channel.logoURL else { return }
+        Task {
+            guard let image = await ChannelLogoLoader.shared.image(for: logoURL),
+                  currentChannel?.id == channel.id else { return }
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            info[MPMediaItemPropertyArtwork] = artwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        }
     }
 
     private func configureRemoteCommandsIfNeeded() {
