@@ -35,6 +35,7 @@ struct ChannelCell: View {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
                         .tint(.green)
+                        .frame(width: 120)
                 }
             }
         }

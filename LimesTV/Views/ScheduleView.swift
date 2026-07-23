@@ -84,7 +84,7 @@ private struct ScheduleRow: View {
                     Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.bottom, 16)
