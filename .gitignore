@@ -12,3 +12,6 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# App Store screenshots (local artifacts)
+AppStoreScreenshots/

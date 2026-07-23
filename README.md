@@ -79,8 +79,6 @@ files.
 The CarPlay UI (channel list + Now Playing) is implemented, but CarPlay requires
 an Apple-granted **entitlement** in the provisioning profile to run on a real
 head unit. Once granted, add the CarPlay capability in *Signing & Capabilities*.
-Roadmap for CarPlay (including video-while-parked support) is in
-[`ROADMAP.md`](ROADMAP.md).
 
 ## Notes
 
