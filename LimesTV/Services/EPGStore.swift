@@ -31,6 +31,18 @@ final class EPGStore {
     @discardableResult
     func loadIfNeeded() async -> Bool {
         if isLoaded { return true }
+        return await load()
+    }
+
+    /// Forces a re-download of the guide (pull to refresh), ignoring the
+    /// once-per-session cache.
+    @discardableResult
+    func refresh() async -> Bool {
+        await load()
+    }
+
+    /// Performs the actual download/index, de-duplicating concurrent callers.
+    private func load() async -> Bool {
         if let loadTask { return await loadTask.value }
 
         let task = Task { () -> Bool in
@@ -70,7 +82,7 @@ final class EPGStore {
 
     /// Indexes the guide by normalized channel name. On collisions the richer
     /// schedule wins.
-    private static func indexByChannelName(_ guide: EPGGuide) -> [String: [EPGProgramme]] {
+    nonisolated private static func indexByChannelName(_ guide: EPGGuide) -> [String: [EPGProgramme]] {
         var result: [String: [EPGProgramme]] = [:]
         for (channelId, programmes) in guide.programmes {
             let key = normalizedKey(channelId)
@@ -84,12 +96,23 @@ final class EPGStore {
     /// Normalizes a channel name/id for fuzzy matching between the m3u channel
     /// names and the EPG's display-name based ids: strips the trailing channel
     /// number, the "I" country tag, HD/4K markers, symbols and accents.
-    static func normalizedKey(_ raw: String) -> String {
+    nonisolated static func normalizedKey(_ raw: String) -> String {
         var value = raw.lowercased()
-        value = value.replacingOccurrences(of: #"\s{2,}\d+\s*$"#, with: "", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"\s+i\s*$"#, with: "", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"\b(hd|fhd|uhd|4k|sd)\b"#, with: "", options: .regularExpression)
+        // Precompiled regexes: compiling them per call (× 3 × hundreds of
+        // channels) blocked the main thread for seconds when rebuilding lists.
+        value = Self.strip(Self.numberSuffixRegex, in: value)
+        value = Self.strip(Self.countryTagRegex, in: value)
+        value = Self.strip(Self.qualityRegex, in: value)
         value = value.folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US_POSIX"))
         return String(value.unicodeScalars.filter { $0.isASCII && CharacterSet.alphanumerics.contains($0) })
     }
+
+    private nonisolated static func strip(_ regex: NSRegularExpression, in value: String) -> String {
+        let range = NSRange(value.startIndex..., in: value)
+        return regex.stringByReplacingMatches(in: value, range: range, withTemplate: "")
+    }
+
+    nonisolated private static let numberSuffixRegex = try! NSRegularExpression(pattern: #"\s{2,}\d+\s*$"#)
+    nonisolated private static let countryTagRegex = try! NSRegularExpression(pattern: #"\s+i\s*$"#)
+    nonisolated private static let qualityRegex = try! NSRegularExpression(pattern: #"\b(hd|fhd|uhd|4k|sd)\b"#)
 }

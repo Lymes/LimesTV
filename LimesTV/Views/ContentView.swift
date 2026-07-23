@@ -96,6 +96,9 @@ struct ContentView: View {
                         .padding()
                     }
                 }
+                .refreshable {
+                    await viewModel.refreshGuide()
+                }
                 // Keep the list aligned with the channel last watched in the player.
                 .onChange(of: viewModel.lastViewedChannel) { _, newValue in
                     guard let newValue else { return }

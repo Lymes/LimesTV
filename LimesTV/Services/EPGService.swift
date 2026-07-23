@@ -9,7 +9,7 @@
 import Foundation
 import OSLog
 
-private let epgLog = Logger(subsystem: "com.lymes.LimesTV", category: "EPG")
+nonisolated private let epgLog = Logger(subsystem: "com.lymes.LimesTV", category: "EPG")
 
 enum EPGError: Error {
     case badResponse
@@ -69,20 +69,28 @@ nonisolated struct EPGService {
             .appendingPathExtension("xml")
         defer { try? FileManager.default.removeItem(at: xmlURL) }
 
+        // Decompress and parse on a real background GCD queue. A Swift
+        // Task.detached was not enough here: awaited from the main-actor caller,
+        // its CPU-bound parse still stalled the main thread (priority
+        // escalation). A dedicated GCD queue keeps the UI fully responsive.
+        let guide: EPGGuide
         do {
-            try GzipFileDecompressor.decompress(from: downloadedURL, to: xmlURL)
+            guide = try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try GzipFileDecompressor.decompress(from: downloadedURL, to: xmlURL)
+                        let data = try Data(contentsOf: xmlURL, options: .mappedIfSafe)
+                        continuation.resume(returning: XMLTVParser().parse(data: data))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
         } catch {
-            epgLog.error("Gunzip failed: \(String(describing: error), privacy: .public)")
+            epgLog.error("Decode/parse failed: \(String(describing: error), privacy: .public)")
             throw error
         }
-        let xmlSize = (try? FileManager.default.attributesOfItem(atPath: xmlURL.path)[.size] as? Int) ?? nil
-        epgLog.log("Decompressed to \(xmlSize ?? -1) bytes")
 
-        guard let stream = InputStream(url: xmlURL) else {
-            epgLog.error("Could not open XML stream")
-            throw EPGError.parseFailed
-        }
-        let guide = XMLTVParser().parse(stream: stream)
         let channels = guide.programmes.count
         let programmes = guide.programmes.values.reduce(0) { $0 + $1.count }
         epgLog.log("Parsed \(programmes) programmes across \(channels) channels")

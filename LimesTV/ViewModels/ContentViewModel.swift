@@ -66,6 +66,12 @@ final class ContentViewModel {
         showToast(loaded ? "Guida TV aggiornata" : "Guida TV non disponibile")
     }
 
+    /// Pull-to-refresh: force a re-sync of the programme guide.
+    func refreshGuide() async {
+        let ok = await EPGStore.shared.refresh()
+        showToast(ok ? "Guida TV aggiornata" : "Guida TV non disponibile")
+    }
+
     /// The programme currently on air for `channel`, if the guide covers it.
     func currentProgramme(for channel: Channel) -> EPGProgramme? {
         EPGStore.shared.currentProgramme(for: channel)

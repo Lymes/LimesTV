@@ -14,7 +14,7 @@ extension UIImage {
     /// A uniform, rounded tile with the logo scaled to fit and centered. The
     /// background is white for dark/colored logos and dark for light/white ones,
     /// so a logo never disappears into its tile.
-    func channelTile(size: CGSize = CGSize(width: 88, height: 88)) -> UIImage {
+    nonisolated func channelTile(size: CGSize = CGSize(width: 88, height: 88)) -> UIImage {
         let isLightLogo = (averageLuminance ?? 0) > 0.6
         let tileColor: UIColor = isLightLogo ? UIColor(white: 0.13, alpha: 1) : .white
 
@@ -42,7 +42,7 @@ extension UIImage {
 
     /// Average perceived brightness of the logo's opaque pixels (0 = dark,
     /// 1 = white), or `nil` if it can't be measured.
-    private var averageLuminance: CGFloat? {
+    nonisolated private var averageLuminance: CGFloat? {
         guard let cgImage else { return nil }
 
         let side = 16

@@ -33,28 +33,21 @@ struct ScheduleView: View {
         if viewModel.programmes.isEmpty {
             ContentUnavailableView("Nessun palinsesto", systemImage: "calendar.badge.exclamationmark")
         } else {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(viewModel.programmes, id: \.self) { programme in
-                            ScheduleRow(
-                                time: viewModel.timeString(programme),
-                                title: programme.title,
-                                description: programme.description,
-                                isCurrent: viewModel.isCurrent(programme, at: date),
-                                isPast: viewModel.isPast(programme, at: date),
-                                progress: viewModel.progress(programme, at: date)
-                            )
-                            .id(programme)
-                        }
-                    }
-                    .padding()
-                }
-                .onAppear {
-                    if let current = viewModel.currentProgramme(at: date) {
-                        proxy.scrollTo(current, anchor: .center)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.programmes, id: \.self) { programme in
+                        ScheduleRow(
+                            time: viewModel.timeString(programme),
+                            title: programme.title,
+                            description: programme.description,
+                            isCurrent: viewModel.isCurrent(programme, at: date),
+                            isPast: viewModel.isPast(programme, at: date),
+                            progress: viewModel.progress(programme, at: date)
+                        )
+                        .id(programme)
                     }
                 }
+                .padding()
             }
         }
     }

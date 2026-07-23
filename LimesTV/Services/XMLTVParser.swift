@@ -34,9 +34,12 @@ final class XMLTVParser: NSObject, XMLParserDelegate {
         return formatter
     }()
 
-    /// Parses the stream and returns the grouped, start-sorted guide.
-    func parse(stream: InputStream) -> EPGGuide {
-        let parser = XMLParser(stream: stream)
+    /// Parses the XMLTV data and returns the grouped, start-sorted guide.
+    /// Uses `XMLParser(data:)` (fully synchronous on the calling thread) rather
+    /// than the stream initializer, which schedules on a run loop and stalled the
+    /// main thread even when parsing off the main actor.
+    func parse(data: Data) -> EPGGuide {
+        let parser = XMLParser(data: data)
         parser.delegate = self
         parser.parse()
         let sorted = programmes.mapValues { $0.sorted { $0.start < $1.start } }

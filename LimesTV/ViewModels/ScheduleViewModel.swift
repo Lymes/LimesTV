@@ -9,7 +9,14 @@ import Foundation
 
 struct ScheduleViewModel {
     let channelName: String
+    /// Only the programme on air now and the upcoming ones — past programmes are
+    /// dropped so the timeline opens at "now".
     let programmes: [EPGProgramme]
+
+    init(channelName: String, programmes: [EPGProgramme], now: Date = Date()) {
+        self.channelName = channelName
+        self.programmes = programmes.filter { $0.stop > now }
+    }
 
     /// Whether `programme` is on air at `date`.
     func isCurrent(_ programme: EPGProgramme, at date: Date) -> Bool {
@@ -32,11 +39,6 @@ struct ScheduleViewModel {
         let total = programme.stop.timeIntervalSince(programme.start)
         guard total > 0 else { return nil }
         return min(max(date.timeIntervalSince(programme.start) / total, 0), 1)
-    }
-
-    /// The programme on air at `date`, used to auto-scroll the timeline.
-    func currentProgramme(at date: Date) -> EPGProgramme? {
-        programmes.first { isCurrent($0, at: date) }
     }
 
     private static let timeFormatter: DateFormatter = {

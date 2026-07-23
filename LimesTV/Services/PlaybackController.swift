@@ -113,7 +113,7 @@ final class PlaybackController {
             // Keep Now Playing (and thus CarPlay) in sync with play/pause,
             // whichever front-end triggered it.
             timeControlObserver = activePlayer.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
-                Task { @MainActor in self?.updateNowPlayingPlaybackState() }
+                Task { @MainActor [weak self] in self?.updateNowPlayingPlaybackState() }
             }
         }
 

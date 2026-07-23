@@ -150,8 +150,9 @@ final class CarPlayCoordinator: NSObject {
         withObservationTracking {
             _ = AppRouter.shared.path
         } onChange: { [weak self] in
+            guard let self else { return }
             Task { @MainActor in
-                guard let self, self.interfaceController != nil else { return }
+                guard self.interfaceController != nil else { return }
                 self.reconcileNowPlaying()
                 self.observeRouter()
             }

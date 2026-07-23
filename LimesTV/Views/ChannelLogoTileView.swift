@@ -33,17 +33,14 @@ struct ChannelLogoTileView: View {
     }
 
     private func loadTile() async {
-        let base = await logo()
-        let rendered = base?.channelTile(size: CGSize(width: size, height: size))
-        // Only publish once (avoids flashing the placeholder back in on reuse).
-        if let rendered { tile = rendered }
-    }
-
-    /// The downloaded logo, or the bundled fallback when unavailable.
-    private func logo() async -> UIImage? {
-        if let logoURL, let image = await ChannelLogoLoader.shared.image(for: logoURL) {
-            return image
+        // Tiles are rendered on the loader's actor (off the main thread) so the
+        // grid stays scrollable while logos load.
+        let dimension = CGSize(width: size, height: size)
+        if let logoURL,
+           let rendered = await ChannelLogoLoader.shared.tile(for: logoURL, size: dimension) {
+            tile = rendered
+            return
         }
-        return UIImage(named: fallbackImageName)
+        tile = await ChannelLogoLoader.shared.tile(forNamed: fallbackImageName, size: dimension)
     }
 }
