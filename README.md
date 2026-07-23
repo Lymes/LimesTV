@@ -6,15 +6,18 @@ transition — with Picture in Picture and CarPlay support.
 
 ## Screenshots
 
-| Channel grid | Player (landscape) |
-| :---: | :---: |
-| <img src="images/screenshot1.jpeg" alt="Channel grid" width="240"> | <img src="images/screenshot2.jpeg" alt="Player in landscape" width="440"> |
+| Channel grid | Schedule (palinsesto) | Player (landscape) |
+| :---: | :---: | :---: |
+| <img src="images/screenshot1.jpeg" alt="Channel grid" width="240"> | <img src="images/screenshot3.jpeg" alt="Programme schedule timeline" width="240"> | <img src="images/screenshot2.jpeg" alt="Player in landscape" width="440"> |
 
 ## Features
 
 - **Channel grid** — adaptive grid of channels with logos, loaded from bundled
   M3U playlists.
 - **Search** — filter channels by name.
+- **Programme guide (EPG)** — downloads an XMLTV guide on launch (streamed and
+  gunzipped off the main thread), shows what's on now on each cell, and a
+  timeline schedule per channel. Pull to refresh to re-sync.
 - **Channel zapping** — swipe up/down while watching to change channel, with a
   carousel slide transition (the outgoing frame slides out while the new channel
   slides in). Swipe right in landscape to go back.
